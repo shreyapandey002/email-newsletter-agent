@@ -7,7 +7,7 @@ class SubscriberCreate(BaseModel):
 class SubscriberResponse(BaseModel):
     id: int
     email: EmailStr
-    is_active: bool
+    is_subscribed: bool
 
     class Config:
         from_attributes = True 
