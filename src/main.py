@@ -38,14 +38,14 @@ def subscribe(subscriber: schemas.SubscriberCreate, db: Session = Depends(get_db
 # Send Email API: batch recipients, send JSON payload
 @app.post("/send-email")
 def send_email(request: schemas.EmailRequest, db: Session = Depends(get_db)):
+    print("sending email")
     html_body = request.html_body
     subscribers = crud.get_active_subscribers(db)
-
     if not subscribers:
         return {"message": "No subscribers to send email."}
 
     all_emails = [sub.email for sub in subscribers]
-
+    print(all_emails)
     # Setup SMTP connection
     with smtplib.SMTP(MAILTRAP_HOST, MAILTRAP_PORT) as server:
         server.starttls()
