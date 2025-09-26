@@ -2,10 +2,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
-import time
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from . import models, schemas, crud
+from . import models, crud, schemas
 from .db import SessionLocal, engine
 from dotenv import load_dotenv
 
@@ -36,7 +35,7 @@ MAILTRAP_PASS = os.getenv("MAILTRAP_PASS")
 def subscribe(subscriber: schemas.SubscriberCreate, db: Session = Depends(get_db)):
     return crud.create_subscriber(db, subscriber)
 
-# Send Email API with throttling
+# Send Email API: batch recipients, send JSON payload
 @app.post("/send-email")
 def send_email(request: schemas.EmailRequest, db: Session = Depends(get_db)):
     html_body = request.html_body
@@ -45,25 +44,24 @@ def send_email(request: schemas.EmailRequest, db: Session = Depends(get_db)):
     if not subscribers:
         return {"message": "No subscribers to send email."}
 
+    all_emails = [sub.email for sub in subscribers]
+
     # Setup SMTP connection
     with smtplib.SMTP(MAILTRAP_HOST, MAILTRAP_PORT) as server:
         server.starttls()
         server.login(MAILTRAP_USER, MAILTRAP_PASS)
 
-        for idx, sub in enumerate(subscribers, 1):
-            msg = MIMEMultipart("alternative")
-            msg["From"] = "Newsletter <newsletter@example.com>"
-            msg["To"] = sub.email
-            msg["Subject"] = "Newsletter"
-            msg.attach(MIMEText(html_body, "html"))
+        msg = MIMEMultipart("alternative")
+        msg["From"] = "Newsletter <newsletter@example.com>"
+        msg["To"] = ", ".join(all_emails)  # Batch all recipients
+        msg["Subject"] = "Newsletter"
+        msg.attach(MIMEText(html_body, "html"))
 
-            try:
-                server.sendmail(msg["From"], sub.email, msg.as_string())
-                print(f"Email sent to {sub.email} ({idx}/{len(subscribers)})")
-            except smtplib.SMTPDataError as e:
-                print(f"Failed to send to {sub.email}: {e}")
-            
-            # Throttle to 1 email per second to avoid Mailtrap limit
-            time.sleep(1)
+        try:
+            server.sendmail(msg["From"], all_emails, msg.as_string())
+            print(f"Newsletter sent to all subscribers: {all_emails}")
+        except smtplib.SMTPDataError as e:
+            print(f"⚠ Failed to send newsletter: {e}")
+            return {"message": "Failed to send newsletter", "error": str(e)}
 
-    return {"message": f"Newsletter sent to {len(subscribers)} subscribers (throttled)."}
+    return {"message": f"Newsletter sent to {len(subscribers)} subscribers (batched in one email)."}
